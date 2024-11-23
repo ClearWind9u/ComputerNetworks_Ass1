@@ -15,7 +15,7 @@ import subprocess
 from urllib.request import urlopen
 import re as r
 
-
+torrent_files = []
 
 class TrackerRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -57,13 +57,32 @@ class TrackerRequestHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
                 self.wfile.write(b"Not Found")
+        elif path.startswith("/get-list"):
+            list = torrent_files
+            list = json.dumps(list)
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(list.encode("utf-8"))
         else:
             # Nếu đường dẫn không hợp lệ, trả về mã trạng thái 404
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(b"Not Found")
-
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if path.startswith("/send-torrent"):
+            content_length = int(self.headers['Content-Length'])  # Độ dài dữ liệu từ client
+            post_data = self.rfile.read(content_length)  # Đọc dữ liệu gửi từ client
+            torrent_file = json.loads(post_data.decode('utf-8'))
+            response = "Torrent file already existed" if any(item["file_name"] == torrent_file["file_name"] for item in torrent_files) else "Send torrent file successfully"
+            if response == "Send torrent file successfully":
+                torrent_files.append(torrent_file)
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(response.encode("utf-8"))
     def _update_seeder(self, port, info_hash, ip):
         try:
             seeder_info = f"{ip}:{port}"
@@ -145,7 +164,7 @@ def get_local_ip(interface='Wi-Fi'):
     else:
         return None
 
-def start_tracker(port=6880):
+def start_tracker(port=8080):
     # Khởi tạo một máy chủ HTTP với cổng được chỉ định
     server_address = (get_local_ip(), port)
     httpd = HTTPServer(server_address, TrackerRequestHandler)

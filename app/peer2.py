@@ -10,6 +10,224 @@ import math
 import subprocess
 from urllib.request import urlopen
 import re
+import tkinter as tk
+from tkinter import filedialog, ttk, messagebox
+import base64
+class StartPage(tk.Frame):
+    def __init__(self,parent, appController,peer):
+        tk.Frame.__init__(self,parent)
+
+        label_title = tk.Label(self, text='LOG IN', font=('Arial', 25))
+        label_user = tk.Label(self, text='Username')
+        label_pswd = tk.Label(self, text='Password')
+
+        self.label_notice = tk.Label(self,text='',fg='red')
+        self.entry_user = tk.Entry(self, width=30,bg='light yellow')
+        self.entry_pswd = tk.Entry(self, width=30,bg='light yellow',show='●')
+        self.tracker_button = tk.Label(self, text='Tracker URL')
+        self.entry_tracker = tk.Entry(self, width=30,bg='light yellow')
+        button_log = tk.Button(self, text='LOG IN', command=lambda: appController.logIn(self,peer))
+        button_log.configure(width=10)
+
+        label_title.pack()
+        label_user.pack()
+        self.entry_user.pack()
+        label_pswd.pack()
+        self.entry_pswd.pack()
+        self.tracker_button.pack()
+        self.entry_tracker.pack()
+        self.label_notice.pack()
+        button_log.pack()     
+    def clear_entries(self):
+        self.entry_user.delete(0, tk.END)
+        self.entry_pswd.delete(0, tk.END)
+        self.label_notice.config(text='') 
+class CreateTorrent(tk.Frame):
+    def __init__(self,parent, appController,peer):
+        tk.Frame.__init__(self, parent)
+        label_title = tk.Label(self, text="Create Torrent File", font=("Arial", 16))
+        label_title.pack(pady=10)
+        self.filepath = ""
+        self.filedir = ""
+
+        self.choose_button = tk.Button(self, text="Choose file ...",command=self.choose_file ,width=15)
+        self.choose_button.pack(pady=10)
+
+        # self.tracker_button = tk.Label(self, text='Tracker URL')
+        # self.entry_tracker = tk.Entry(self, width=30,bg='light yellow')
+        # self.tracker_button.pack()
+        # self.entry_tracker.pack()
+
+        self.create_button = tk.Button(self, text="Create Torrent",command=lambda: self.create_torrent(appController,peer) ,width=15)
+        self.create_button.pack(pady=10)
+    
+    def choose_file(self):
+        file_path = filedialog.askopenfilename(title="Select a File")
+        self.filepath = file_path
+        self.filedir = os.path.dirname(file_path)
+    def create_torrent(self,appController,peer):
+        tracker = peer.tracker_url
+        if self.filepath == "" or self.filedir == "" or tracker == "":
+             messagebox.showinfo("Note", "Fields cannot be empty")
+             return
+        else:
+            filepath = self.filepath
+            filedir = self.filedir
+            peer.create_torrent_file(filepath, filedir, tracker)
+            messagebox.showinfo("Note", "Create torrent file successfully!")
+            appController.showPage(HomePage)
+class HomePage(tk.Frame):
+    def __init__(self,parent, appController,peer):
+        tk.Frame.__init__(self, parent)
+        label_title = tk.Label(self, text="File Upload Application", font=("Arial", 16))
+        label_title.pack(pady=10)
+        self.uploaded_files = []
+
+        self.torrent_button = tk.Button(self, text="Create Torrent",command=lambda: appController.showPage(CreateTorrent), width=15)
+        self.torrent_button.pack(pady=5)
+
+        # Nút bấm Upload
+        self.upload_button = tk.Button(self, text="Upload File", command=lambda: self.upload_file(peer), width=15)
+        self.upload_button.pack(pady=5)
+
+       
+        # Nút bấm Download
+        self.download_button = tk.Button(self, text="Download File", command=lambda: self.download_file(peer), width=15)
+        self.download_button.pack(pady=5)
+
+        self.refresh_button = tk.Button(self, text="Refresh",command=lambda:self.refresh(peer) ,width=15)
+        self.refresh_button.pack(pady=5)
+
+        self.btn_log_out = tk.Button(self, text="Log Out", command=lambda: appController.showPage(StartPage), width=15)
+        self.download_button.pack(pady=5)
+
+        # Giao diện hiển thị danh sách file
+        self.file_list_frame = ttk.Frame(self)
+        self.file_list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Treeview với hai cột: STT và Tên file
+        self.file_list_tree = ttk.Treeview(
+            self.file_list_frame, columns=("idx", "file_name"), show="headings"
+        )
+        self.file_list_tree.heading("idx", text="Index")
+        self.file_list_tree.heading("file_name", text="Torrent Files")
+        self.file_list_tree.column("idx", width=50, anchor="center")  # Căn giữa cột STT
+        self.file_list_tree.column("file_name", width=500, anchor="w")  # Căn trái tên file
+        self.file_list_tree.pack(fill=tk.BOTH, expand=True)
+
+        # Thanh cuộn dọc cho danh sách file
+        scrollbar = ttk.Scrollbar(self.file_list_frame, orient=tk.VERTICAL, command=self.file_list_tree.yview)
+        self.file_list_tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    def refresh(self,peer):
+        self.uploaded_files = peer.refresh_server()
+        for item in self.file_list_tree.get_children():
+            self.file_list_tree.delete(item)
+        for i in range(0,len(self.uploaded_files)):
+            self.file_list_tree.insert("", tk.END, values=(i+1, self.uploaded_files[i]["file_name"]))
+    def upload_file(self,peer):
+        """Hàm xử lý khi nhấn nút Upload."""
+        file_path = filedialog.askopenfilename(
+            title="Select a File",
+            filetypes=(("Torrent files", "*.torrent"), ("All files", "*.*"))  # Bộ lọc thêm file .torrent
+        )
+        if file_path:
+            try:
+                response1 = peer.upload_torrent_file(file_path)
+                # Đọc nội dung file (xử lý file nhị phân nếu cần)
+                with open(file_path, "rb") as file:  # Mở file ở chế độ nhị phân
+                    content = file.read()
+                encoded_content = base64.b64encode(content).decode("utf-8")
+                # Lưu tên file và nội dung vào danh sách
+                file_name = file_path.split("/")[-1]
+                sendData = {"file_name": file_name, "content": encoded_content}
+                response2 = peer.send_torrent(sendData)
+                # Thêm file vào Treeview với STT
+                self.refresh(peer)
+
+                # Hiển thị thông báo
+                messagebox.showinfo("Note", f"{response1}\n{response2}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to read file: {e}")
+    def download_file(self,peer):
+        """Hàm xử lý khi nhấn nút Download."""
+        selected_item = self.file_list_tree.selection()  # Lấy ID của dòng được chọn
+        if not selected_item:
+            messagebox.showwarning("No Selection", "Please select a file to download!")
+            return
+
+        # Lấy số thứ tự từ Treeview
+        item = self.file_list_tree.item(selected_item)
+        stt = item["values"][0] - 1  # STT trong Treeview bắt đầu từ 1, index trong danh sách bắt đầu từ 0
+
+        # Lấy thông tin file từ danh sách
+        file_data = self.uploaded_files[stt]
+        file_name = file_data["file_name"]
+        torrent_data = file_data["content"]
+        torrent_data = base64.b64decode(torrent_data.encode("utf-8"))
+        # Hộp thoại chọn vị trí lưu file
+        save_path = filedialog.asksaveasfilename(
+            title="Save File As",
+            initialfile=".".join(file_name.split(".")[:-1]),
+            defaultextension="",  # Không đặt phần mở rộng mặc định
+            filetypes=(("All files", "*.*"), ("Torrent files", "*.torrent"))
+        )
+
+        if save_path:
+            try:
+                # Ghi nội dung file vào vị trí được chọn (nhị phân)
+                peer.download_torrent_file(torrent_data, save_path)
+                messagebox.showinfo("Download Successful", f"File saved as '{save_path}'!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save file: {e}")
+           
+
+class App(tk.Tk):
+    def __init__(self,peer):
+        tk.Tk.__init__(self)
+        self.account = [('binh2308','1'),('phong2808','1')]
+        self.title(f'Peer {peer.port}')
+        self.geometry("800x500")
+        self.resizable(width=False, height=False)
+
+        container = tk.Frame()
+
+        container.pack(side='top',fill='both',expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+        self.frames = {}
+        for F in (StartPage, HomePage, CreateTorrent):
+            frame = F(container, self,peer)
+            frame.grid(row=0, column=0,sticky='nsew')
+            self.frames[F] = frame
+        self.frames[StartPage].tkraise()
+    def showPage(self, FrameClass):
+        if FrameClass == StartPage:
+            self.frames[FrameClass].clear_entries()
+        self.frames[FrameClass].tkraise()    
+    def compareAccount(self,user,password):
+        for acc in self.account:
+            if user == acc[0] and password == acc[1]:
+                return True
+        return False
+    def logIn(self, curFrame,peer):
+        try:
+            user = curFrame.entry_user.get()
+            pswd = curFrame.entry_pswd.get()
+            tracker_url = curFrame.entry_tracker.get()
+            if user == "" or pswd == "" or tracker_url == "":
+                curFrame.label_notice["text"] = "Fields cannot be empty"
+                return
+            peer.tracker_url = tracker_url
+            compare = self.compareAccount(user,pswd)
+            if(compare):
+                self.showPage(HomePage)
+            else: 
+                curFrame.label_notice["text"] = "Invalid username or password"
+                return
+        except Exception as e:
+            print("Error: ", e)
+       
 
 class Peer:
     def __init__(self):
@@ -17,8 +235,8 @@ class Peer:
         self.port = None
         self.bytes = 0
         self.file_path = []
-    
-    def find_empty_port(self, start_port=6881, end_port=65535):
+        self.tracker_url = ""
+    def find_empty_port(self, start_port=8000, end_port=8100):
         for port in range(start_port, end_port + 1):
             try:
                 # Thử bind socket đến cổng được chỉ định
@@ -31,7 +249,13 @@ class Peer:
                 continue
         # Không tìm thấy cổng trống trong phạm vi được chỉ định
         return None
-
+    def send_torrent(self,data):
+        tracker_url = self.tracker_url + "/send-torrent"
+        response = requests.post(tracker_url, json=data)
+        if response.status_code == 200:
+              data = response.text
+              return data
+        else: return "Fail to send file to server"
     def write_string_to_file(self, string):
         file_name = f"info_{self.port}.txt"
         file_dir = "peer_directory"
@@ -57,12 +281,22 @@ class Peer:
                 file.write(unique_string + '\n')
 
     def create_torrent_file(self, file_path, file_dir, tracker_url):
+        self.tracker_url = tracker_url
         file_name = os.path.basename(file_path)
         self.write_string_to_file(file_path)
         print(f"Creating torrent file for {file_name}...")
         info_hash = transform.create_torrent(file_path, tracker_url, os.path.join(file_dir, f'{file_name}.torrent'))
-
-    def upload_torrent_file(self, file_path, tracker_url):
+    def refresh_server(self):
+        try:
+            tracker_url = self.tracker_url + "/get-list"
+            response = requests.get(tracker_url)
+            if response.status_code == 200:
+                data = response.json()
+                return data
+            else: return []
+        except Exception as e:
+            return []
+    def upload_torrent_file(self, file_path):
         try:
             # Đọc dữ liệu từ file torrent
             with open(file_path, 'rb') as torrent_file:
@@ -70,29 +304,21 @@ class Peer:
             
             info_hash = str(hashlib.sha1(torrent_data).hexdigest())
             try:
-                tracker_url = tracker_url + "/announce/upload" + "?info_hash=" + info_hash
+                tracker_url = self.tracker_url + "/announce/upload" + "?info_hash=" + info_hash
                 params = {"port": self.port}  # Thêm thông tin cổng vào yêu cầu
                 response = requests.get(tracker_url, params=params)
                 if response.status_code == 200:
-                    print("Upload to tracker successfully.")
+                    return  "Upload to tracker successfully."
                 else:
-                    print("Failed to upload to tracker. Status code:", response.status_code)
+                    return f"Failed to upload to tracker. Status code: {response.status_code}" 
             except Exception as e:
-                print("Error connecting to tracker:", e)
+                return f"Error connecting to tracker: {e}"
         except Exception as e:
-            print(f"Error uploading torrent file: {e}")
+           return f"Error uploading torrent file: {e}"
 
-    def download_torrent_file(self, torrent_file_path, destination):
-        torrent_file_name = os.path.basename(torrent_file_path)
-        # Tách phần tên tệp ra khỏi phần mở rộng (ví dụ: 't.png.torrent' sẽ trở thành 't.png')
-        file_name_without_extension = os.path.splitext(torrent_file_name)[0]
-        # Kết hợp đường dẫn của thư mục đích với tên tệp (ví dụ: '/home/linh/Documents/codecrafters-bittorrent-python/app/res/t.png')
-        file_path = os.path.join(destination, file_name_without_extension)
-        destination = file_path
+    def download_torrent_file(self, torrent_data, destination):
+       
         try:
-            with open(torrent_file_path, 'rb') as torrent_file:
-                torrent_data = torrent_file.read()
-            
             decoded_torrent = bencodepy.decode(torrent_data)
             decoded_str_keys = {transform.bytes_to_str(k): v for k, v in decoded_torrent.items()}
 
@@ -101,7 +327,6 @@ class Peer:
                 
             try:
                 announce_url_down = announce_url + "/announce/download"
-                # announce_url_down = "http://10.0.137.88:8080/announce/download"
                 response = requests.get(announce_url_down, params={"info_hash": info_hash})
                 # Kiểm tra mã trạng thái của phản hồi
                 if response.status_code == 200:
@@ -385,7 +610,16 @@ class Peer:
             print(f"Merged temporary files into {destination}")
         except Exception as e:
             print(f"Error merging temporary files: {e}")
-
+    def start_server(self):
+        self.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+        self.listen_socket.bind((get_local_ip(), peer.port)) 
+        # print ip address of local that other can see 
+        self.listen_socket.listen(5)
+        while True:
+            client_socket, client_address = self.listen_socket.accept()
+            print(f"Accepted connection from {client_address}")
+            threading.Thread(target=self.handle_peer_request, args=(client_socket, client_address)).start()
+            #self.handle_peer_request(client_socket, client_address)
 def get_local_ip(interface='Wi-Fi'):
     # Chạy lệnh ipconfig và lấy kết quả
     result = subprocess.run(['ipconfig'], capture_output=True, text=True)
@@ -419,61 +653,53 @@ if __name__ == "__main__":
         peer.port = peer.find_empty_port()
         print(f"Peer is listening on {get_local_ip()}:{peer.port}")
         # Create a new socket for listening to peer connections
-        peer.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-        
-        peer.listen_socket.bind((get_local_ip(), peer.port)) 
-        # print ip address of local that other can see 
-        
-        peer.listen_socket.listen(5)
-
+        server_thread = threading.Thread(target=peer.start_server,daemon=True)
+        server_thread.start()
+        app = App(peer)
+        app.mainloop()
         # Define a function to handle user input
-        def handle_user_input():
-            while True:
-                command = input("\nEnter command: ")
-                command_parts = command.split()
+        # def handle_user_input():
+        #     while True:
+        #         command = input("\nEnter command: ")
+        #         command_parts = command.split()
 
-                if command.lower() == "stop":
-                    print("Number of bytes download: ", peer.bytes)
-                    # Đóng socket nghe khi kết thúc chương trình
-                    peer.listen_socket.close()
-                    break
-                elif command.startswith("create"):
-                    if len(command_parts) >= 4:
-                        file_path = command_parts[1]
-                        file_dir = command_parts[2]
-                        url = command_parts[3]
-                        file_name = os.path.basename(file_path)
-                        peer.create_torrent_file(file_path, file_dir, url)
-                        print(f"Torrent file is created for {file_name}")
-                    else:
-                        print(f"Torrent file can not be created for {file_name}")
-                elif command.startswith("upload"):
-                    if len(command_parts) >= 3:
-                        torrent_file_path = command_parts[1]
-                        new_url = command_parts[2]
-                        if os.path.isfile(torrent_file_path):
-                            peer.upload_torrent_file(torrent_file_path, new_url)
-                        else:
-                            print("Error: Torrent file not found.")
-                    else:
-                        print("Invalid command: Missing file name.")
-                elif command.startswith("download"):
-                    if len(command_parts) >= 3:
-                        torrent_file_path = command_parts[1]
-                        destination = command_parts[2]
-                        # Gửi yêu cầu tải file từ tracker
-                        if os.path.isfile(torrent_file_path):
-                            peer.download_torrent_file(torrent_file_path, destination)
-                        else:
-                            print("Error: Torrent file not found.")
+        #         if command.lower() == "stop":
+        #             print("Number of bytes download: ", peer.bytes)
+        #             # Đóng socket nghe khi kết thúc chương trình
+        #             peer.listen_socket.close()
+        #             break
+        #         elif command.startswith("create"):
+        #             if len(command_parts) >= 4:
+        #                 file_path = command_parts[1]
+        #                 file_dir = command_parts[2]
+        #                 url = command_parts[3]
+        #                 file_name = os.path.basename(file_path)
+        #                 peer.create_torrent_file(file_path, file_dir, url)
+        #                 print(f"Torrent file is created for {file_name}")
+        #             else:
+        #                 print(f"Torrent file can not be created for {file_name}")
+        #         elif command.startswith("upload"):
+        #             if len(command_parts) >= 3:
+        #                 torrent_file_path = command_parts[1]
+        #                 new_url = command_parts[2]
+        #                 if os.path.isfile(torrent_file_path):
+        #                     peer.upload_torrent_file(torrent_file_path, new_url)
+        #                 else:
+        #                     print("Error: Torrent file not found.")
+        #             else:
+        #                 print("Invalid command: Missing file name.")
+        #         elif command.startswith("download"):
+        #             if len(command_parts) >= 3:
+        #                 torrent_file_path = command_parts[1]
+        #                 destination = command_parts[2]
+        #                 # Gửi yêu cầu tải file từ tracker
+        #                 if os.path.isfile(torrent_file_path):
+        #                     peer.download_torrent_file(torrent_file_path, destination)
+        #                 else:
+        #                     print("Error: Torrent file not found.")
            
-        # Create a thread for handling user input
-        user_input_thread = threading.Thread(target=handle_user_input)
-        user_input_thread.start()
-
-        while True:
-            client_socket, client_address = peer.listen_socket.accept()
-            print(f"Accepted connection from {client_address}")
-            threading.Thread(target=peer.handle_peer_request, args=(client_socket, client_address)).start()
+        # # Create a thread for handling user input
+        # user_input_thread = threading.Thread(target=handle_user_input)
+        # user_input_thread.start()
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"Error occurred: {e}")    #""C:/Users/PC/Desktop/test/test.docx""
