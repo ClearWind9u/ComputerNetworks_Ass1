@@ -13,6 +13,9 @@ import re
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import base64
+
+local_ip = ""
+
 class StartPage(tk.Frame):
     def __init__(self,parent, appController,peer):
         tk.Frame.__init__(self,parent)
@@ -53,17 +56,22 @@ class CreateTorrent(tk.Frame):
         self.choose_button = tk.Button(self, text="Choose file ...",command=self.choose_file ,width=15)
         self.choose_button.pack(pady=10)
 
-        # self.tracker_button = tk.Label(self, text='Tracker URL')
+        self.file_choose = tk.Label(self, text="",font=("Arial",12))
         # self.entry_tracker = tk.Entry(self, width=30,bg='light yellow')
-        # self.tracker_button.pack()
+        self.file_choose.pack(pady=10)
         # self.entry_tracker.pack()
 
         self.create_button = tk.Button(self, text="Create Torrent",command=lambda: self.create_torrent(appController,peer) ,width=15)
         self.create_button.pack(pady=10)
+
+        self.back_button = tk.Button(self, text="Back",command=lambda: appController.showPage(HomePage) ,width=15)
+        self.back_button.pack(pady=10)
+
     
     def choose_file(self):
         file_path = filedialog.askopenfilename(title="Select a File")
         self.filepath = file_path
+        self.file_choose.config(text=self.filepath)
         self.filedir = os.path.dirname(file_path)
     def create_torrent(self,appController,peer):
         tracker = peer.tracker_url
@@ -75,11 +83,12 @@ class CreateTorrent(tk.Frame):
             filedir = self.filedir
             peer.create_torrent_file(filepath, filedir, tracker)
             messagebox.showinfo("Note", "Create torrent file successfully!")
+            self.file_choose.config(text="")
             appController.showPage(HomePage)
 class HomePage(tk.Frame):
     def __init__(self,parent, appController,peer):
         tk.Frame.__init__(self, parent)
-        label_title = tk.Label(self, text="File Upload Application", font=("Arial", 16))
+        label_title = tk.Label(self, text="File Sharing Application", font=("Arial", 16))
         label_title.pack(pady=10)
         self.uploaded_files = []
 
@@ -107,11 +116,11 @@ class HomePage(tk.Frame):
 
         # Treeview với hai cột: STT và Tên file
         self.file_list_tree = ttk.Treeview(
-            self.file_list_frame, columns=("idx", "file_name"), show="headings"
+            self.file_list_frame, columns=("addr", "file_name"), show="headings"
         )
-        self.file_list_tree.heading("idx", text="Index")
+        self.file_list_tree.heading("addr", text="Address")
         self.file_list_tree.heading("file_name", text="Torrent Files")
-        self.file_list_tree.column("idx", width=50, anchor="center")  # Căn giữa cột STT
+        self.file_list_tree.column("addr", width=50, anchor="center")  # Căn giữa cột STT
         self.file_list_tree.column("file_name", width=500, anchor="w")  # Căn trái tên file
         self.file_list_tree.pack(fill=tk.BOTH, expand=True)
 
@@ -123,14 +132,17 @@ class HomePage(tk.Frame):
         self.uploaded_files = peer.refresh_server()
         for item in self.file_list_tree.get_children():
             self.file_list_tree.delete(item)
-        for i in range(0,len(self.uploaded_files)):
-            self.file_list_tree.insert("", tk.END, values=(i+1, self.uploaded_files[i]["file_name"]))
+        for item in self.uploaded_files:
+            self.file_list_tree.insert("", tk.END, values=(item["address"], item["file_name"]))
     def upload_file(self,peer):
         """Hàm xử lý khi nhấn nút Upload."""
         file_path = filedialog.askopenfilename(
             title="Select a File",
             filetypes=(("Torrent files", "*.torrent"), ("All files", "*.*"))  # Bộ lọc thêm file .torrent
         )
+        if file_path.find(".torrent") == -1:
+            messagebox.showerror("Error", "File must be torrent!")
+            return
         if file_path:
             try:
                 response1 = peer.upload_torrent_file(file_path)
@@ -140,7 +152,7 @@ class HomePage(tk.Frame):
                 encoded_content = base64.b64encode(content).decode("utf-8")
                 # Lưu tên file và nội dung vào danh sách
                 file_name = file_path.split("/")[-1]
-                sendData = {"file_name": file_name, "content": encoded_content}
+                sendData = {"file_name": file_name, "content": encoded_content, "address": f"{local_ip}:{peer.port}"}
                 response2 = peer.send_torrent(sendData)
                 # Thêm file vào Treeview với STT
                 self.refresh(peer)
@@ -155,32 +167,33 @@ class HomePage(tk.Frame):
         if not selected_item:
             messagebox.showwarning("No Selection", "Please select a file to download!")
             return
-
-        # Lấy số thứ tự từ Treeview
-        item = self.file_list_tree.item(selected_item)
-        stt = item["values"][0] - 1  # STT trong Treeview bắt đầu từ 1, index trong danh sách bắt đầu từ 0
-
-        # Lấy thông tin file từ danh sách
-        file_data = self.uploaded_files[stt]
-        file_name = file_data["file_name"]
-        torrent_data = file_data["content"]
-        torrent_data = base64.b64decode(torrent_data.encode("utf-8"))
+        save_path = None
+        for item_id in selected_item:
+            # Lấy số thứ tự từ Treeview
+            item = self.file_list_tree.item(item_id)
+            #stt = item["values"][0] - 1  # STT trong Treeview bắt đầu từ 1, index trong danh sách bắt đầu từ 0
+            file_data = next((data for data in self.uploaded_files if data["address"] == item["values"][0] and data["file_name"] == item["values"][1]), {})
+            # Lấy thông tin file từ danh sách
+            file_name = file_data["file_name"]
+            torrent_data = file_data["content"]
+            torrent_data = base64.b64decode(torrent_data.encode("utf-8"))
         # Hộp thoại chọn vị trí lưu file
-        save_path = filedialog.asksaveasfilename(
-            title="Save File As",
-            initialfile=".".join(file_name.split(".")[:-1]),
-            defaultextension="",  # Không đặt phần mở rộng mặc định
-            filetypes=(("All files", "*.*"), ("Torrent files", "*.torrent"))
-        )
-
-        if save_path:
-            try:
+            if not save_path:
+                save_path = filedialog.asksaveasfilename(
+                    title="Save File As",
+                    initialfile=".".join(file_name.split(".")[:-1]),
+                    defaultextension="",  # Không đặt phần mở rộng mặc định
+                    filetypes=(("All files", "*.*"), ("Torrent files", "*.torrent"))
+                )
+            else: save_path = os.path.dirname(save_path) + "/" + ".".join(file_name.split(".")[:-1])
+            if save_path:
+                try:
                 # Ghi nội dung file vào vị trí được chọn (nhị phân)
-                peer.download_torrent_file(torrent_data, save_path)
-                messagebox.showinfo("Download Successful", f"File saved as '{save_path}'!")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save file: {e}")
-           
+                    peer.download_torrent_file(torrent_data, save_path)
+                    
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save file: {e}")
+        messagebox.showinfo("Download Successful", f"File saved as '{save_path}'!")   
 
 class App(tk.Tk):
     def __init__(self,peer):
@@ -305,7 +318,7 @@ class Peer:
             info_hash = str(hashlib.sha1(torrent_data).hexdigest())
             try:
                 tracker_url = self.tracker_url + "/announce/upload" + "?info_hash=" + info_hash
-                params = {"port": self.port}  # Thêm thông tin cổng vào yêu cầu
+                params = {"ip": get_local_ip(),"port": self.port}  # Thêm thông tin cổng vào yêu cầu
                 response = requests.get(tracker_url, params=params)
                 if response.status_code == 200:
                     return  "Upload to tracker successfully."
@@ -620,26 +633,16 @@ class Peer:
             print(f"Accepted connection from {client_address}")
             threading.Thread(target=self.handle_peer_request, args=(client_socket, client_address)).start()
             #self.handle_peer_request(client_socket, client_address)
-def get_local_ip(interface='Wi-Fi'):
-    # Chạy lệnh ipconfig và lấy kết quả
-    result = subprocess.run(['ipconfig'], capture_output=True, text=True)
+
+# HDH Linux
+
+def get_local_ip(interface='enp0s3'):
+    # Chạy lệnh ifconfig và lấy kết quả
+    result = subprocess.run(['ifconfig', interface], capture_output=True, text=True)
 
     # Phân tích kết quả để tìm địa chỉ IP
-    ip_pattern = r'IPv4 Address.*?: (\d+\.\d+\.\d+\.\d+)'
-
-    # Nếu interface được chỉ định, lọc theo interface
-    if interface:
-        interface_pattern = re.escape(interface)
-        interface_start = re.search(interface_pattern, result.stdout, re.IGNORECASE)
-        if not interface_start:
-            return None  # Giao diện không tìm thấy
-        # Lấy phần văn bản sau tên giao diện
-        output_after_interface = result.stdout[interface_start.end():]
-        # Tìm địa chỉ IP chỉ trong phần này
-        match = re.search(ip_pattern, output_after_interface)
-    else:
-        # Nếu không chỉ định interface, tìm địa chỉ IP đầu tiên
-        match = re.search(ip_pattern, result.stdout)
+    ip_pattern = r'inet (\d+\.\d+\.\d+\.\d+)'
+    match = re.search(ip_pattern, result.stdout)
 
     # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
     if match:
@@ -647,59 +650,45 @@ def get_local_ip(interface='Wi-Fi'):
     else:
         return None
 
+# HDH Windows    
+
+# def get_local_ip(interface='Wi-Fi'):
+#     # Chạy lệnh ipconfig và lấy kết quả
+#     result = subprocess.run(['ipconfig'], capture_output=True, text=True)
+
+#     # Phân tích kết quả để tìm địa chỉ IP
+#     ip_pattern = r'IPv4 Address.*?: (\d+\.\d+\.\d+\.\d+)'
+
+#     # Nếu interface được chỉ định, lọc theo interface
+#     if interface:
+#         interface_pattern = re.escape(interface)
+#         interface_start = re.search(interface_pattern, result.stdout, re.IGNORECASE)
+#         if not interface_start:
+#             return None  # Giao diện không tìm thấy
+#         # Lấy phần văn bản sau tên giao diện
+#         output_after_interface = result.stdout[interface_start.end():]
+#         # Tìm địa chỉ IP chỉ trong phần này
+#         match = re.search(ip_pattern, output_after_interface)
+#     else:
+#         # Nếu không chỉ định interface, tìm địa chỉ IP đầu tiên
+#         match = re.search(ip_pattern, result.stdout)
+
+#     # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
+#     if match:
+#         return match.group(1)
+#     else:
+#         return None
+
 if __name__ == "__main__":
     peer = Peer()
     try:
+        local_ip = get_local_ip()
         peer.port = peer.find_empty_port()
-        print(f"Peer is listening on {get_local_ip()}:{peer.port}")
+        print(f"Peer is listening on {local_ip}:{peer.port}")
         # Create a new socket for listening to peer connections
         server_thread = threading.Thread(target=peer.start_server,daemon=True)
         server_thread.start()
         app = App(peer)
         app.mainloop()
-        # Define a function to handle user input
-        # def handle_user_input():
-        #     while True:
-        #         command = input("\nEnter command: ")
-        #         command_parts = command.split()
-
-        #         if command.lower() == "stop":
-        #             print("Number of bytes download: ", peer.bytes)
-        #             # Đóng socket nghe khi kết thúc chương trình
-        #             peer.listen_socket.close()
-        #             break
-        #         elif command.startswith("create"):
-        #             if len(command_parts) >= 4:
-        #                 file_path = command_parts[1]
-        #                 file_dir = command_parts[2]
-        #                 url = command_parts[3]
-        #                 file_name = os.path.basename(file_path)
-        #                 peer.create_torrent_file(file_path, file_dir, url)
-        #                 print(f"Torrent file is created for {file_name}")
-        #             else:
-        #                 print(f"Torrent file can not be created for {file_name}")
-        #         elif command.startswith("upload"):
-        #             if len(command_parts) >= 3:
-        #                 torrent_file_path = command_parts[1]
-        #                 new_url = command_parts[2]
-        #                 if os.path.isfile(torrent_file_path):
-        #                     peer.upload_torrent_file(torrent_file_path, new_url)
-        #                 else:
-        #                     print("Error: Torrent file not found.")
-        #             else:
-        #                 print("Invalid command: Missing file name.")
-        #         elif command.startswith("download"):
-        #             if len(command_parts) >= 3:
-        #                 torrent_file_path = command_parts[1]
-        #                 destination = command_parts[2]
-        #                 # Gửi yêu cầu tải file từ tracker
-        #                 if os.path.isfile(torrent_file_path):
-        #                     peer.download_torrent_file(torrent_file_path, destination)
-        #                 else:
-        #                     print("Error: Torrent file not found.")
-           
-        # # Create a thread for handling user input
-        # user_input_thread = threading.Thread(target=handle_user_input)
-        # user_input_thread.start()
     except Exception as e:
         print(f"Error occurred: {e}")    #""C:/Users/PC/Desktop/test/test.docx""

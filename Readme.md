@@ -27,40 +27,47 @@ cd app
 2. Chạy tracker bằng lệnh:
 
 ```
-python3 tracker.py
+python3 tracker2.py
 ```
 
 3. Chạy peer bằng lệnh:
 
 ```
-python3 peer.py
+python3 peer2.py
 ```
 
-## Các chức năng chính
+## Cách đăng nhập
+
+Nhập một trong 2 tài khoản sau là có thể đăng nhập vào giao diện chính:
+{username: binh2308, password: 1}
+{username: phong2808, password: 1}
+Tracker url: nhập http://<địa chỉ ip và port của tracker>
+Địa chỉ ip và port sẽ hiện trên terminal của tracker2.py sau khi chạy file
+VD: http://192.168.1.48:8080
 
 ### Tạo file torrent:
 
-Để tạo file torrent, bạn cần sử dụng lệnh sau:
+Để tạo file torrent, bạn làm theo các bước sau:
 
-```
-create <đường dẫn đến file muốn tạo torrent> <đường dẫn đến thư mục lưu file torrent> <địa chỉ http của tracker>
-```
+1. Nhấp vào nút Create Torrent trên giao diện chính
+2. Sau khi xuất hiện cửa sổ giao diện tạo file torrent, click nút Choose file để chọn file cần tạo torrent
+3. Nhấn chọn Create Torrent để tạo file
+   File torrent sau khi tạo sẽ lưu ở trong cùng đường dẫn với file gốc
 
-### Upload file torrent:
+###  Upload file torrent:
 
-Để upload file torrent, bạn cần sử dụng lệnh sau:
-
-```
-upload <đường dẫn đến file torrent> <địa chỉ http của tracker>
-```
+Để upload file torrent, bạn làm các bước sau:
+1. Nhấn chọn nút Upload File trên giao diện chính
+2. Chọn file torrent cần tải lên (chỉ tải lên được định dạng torrent thôi, chọn file có định dạng khác sẽ báo lỗi)
+3. Sau khi chọn file thì hệ thống sẽ tự động tải file torrent qua server
 
 ### Download file torrent:
 
-Để download file torrent, bạn cần sử dụng lệnh sau:
+Để download file torrent, bạn làm theo các bước sau:
 
-```
-download <đường dẫn đến file torrent> <đường dẫn đến thư mục lưu file tải về>
-```
+1. Nhấn chọn Refresh để tải lại danh sách những file torrent mới nhất được upload lên server
+2. Nhấp chọn file torrent cần tải, sau đó nhấn Download File (có thể giữ Ctrl khi chọn file để download được nhiều file cùng lúc)
+3. Chọn nơi lưu file tải về, sau đó file sẽ được tải xuống
 
 Vui lòng thay thế các thông tin cụ thể như đường dẫn và địa chỉ http theo yêu cầu của bạn.
 
