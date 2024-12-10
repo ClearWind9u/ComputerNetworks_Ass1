@@ -136,51 +136,19 @@ class TrackerRequestHandler(BaseHTTPRequestHandler):
                     return line.split(": ", 1)[1]  # In ra phần sau của dòng chứa chuỗi
                     break
         return NULL
-    
-# HDH Linux
 
-def get_local_ip(interface='enp0s3'):
-    # Chạy lệnh ifconfig và lấy kết quả
-    result = subprocess.run(['ifconfig', interface], capture_output=True, text=True)
 
-    # Phân tích kết quả để tìm địa chỉ IP
-    ip_pattern = r'inet (\d+\.\d+\.\d+\.\d+)'
-    match = re.search(ip_pattern, result.stdout)
 
-    # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
-    if match:
-        return match.group(1)
-    else:
+def get_local_ip():
+    try:
+        # Tạo một socket kết nối đến một địa chỉ bất kỳ (Google DNS)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+        return ip_address
+    except Exception as e:
+        print(f"Lỗi khi lấy địa chỉ IP: {e}")
         return None
-
-# HDH Windows
-
-# def get_local_ip(interface='Wi-Fi'):
-#     # Chạy lệnh ipconfig và lấy kết quả
-#     result = subprocess.run(['ipconfig'], capture_output=True, text=True)
-
-#     # Phân tích kết quả để tìm địa chỉ IP
-#     ip_pattern = r'IPv4 Address.*?: (\d+\.\d+\.\d+\.\d+)'
-
-#     # Nếu interface được chỉ định, lọc theo interface
-#     if interface:
-#         interface_pattern = re.escape(interface)
-#         interface_start = re.search(interface_pattern, result.stdout, re.IGNORECASE)
-#         if not interface_start:
-#             return None  # Giao diện không tìm thấy
-#         # Lấy phần văn bản sau tên giao diện
-#         output_after_interface = result.stdout[interface_start.end():]
-#         # Tìm địa chỉ IP chỉ trong phần này
-#         match = re.search(ip_pattern, output_after_interface)
-#     else:
-#         # Nếu không chỉ định interface, tìm địa chỉ IP đầu tiên
-#         match = re.search(ip_pattern, result.stdout)
-
-#     # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
-#     if match:
-#         return match.group(1)
-#     else:
-#         return None
 
 def start_tracker(port=8080):
     # Khởi tạo một máy chủ HTTP với cổng được chỉ định

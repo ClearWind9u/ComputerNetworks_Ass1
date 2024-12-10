@@ -20,30 +20,24 @@ class StartPage(tk.Frame):
     def __init__(self,parent, appController,peer):
         tk.Frame.__init__(self,parent)
 
-        label_title = tk.Label(self, text='LOG IN', font=('Arial', 25))
-        label_user = tk.Label(self, text='Username')
-        label_pswd = tk.Label(self, text='Password')
+        label_title = tk.Label(self, text='FILE SHARING APPLICATION', font=('Arial', 18))
+       
 
         self.label_notice = tk.Label(self,text='',fg='red')
-        self.entry_user = tk.Entry(self, width=30,bg='light yellow')
-        self.entry_pswd = tk.Entry(self, width=30,bg='light yellow',show='●')
         self.tracker_button = tk.Label(self, text='Tracker URL')
-        self.entry_tracker = tk.Entry(self, width=30,bg='light yellow')
-        button_log = tk.Button(self, text='LOG IN', command=lambda: appController.logIn(self,peer))
+        self.entry_tracker = tk.Entry(self, width=50,bg='light yellow')
+        button_log = tk.Button(self, text='Start', command=lambda: appController.logIn(self,peer))
         button_log.configure(width=10)
 
         label_title.pack()
-        label_user.pack()
-        self.entry_user.pack()
-        label_pswd.pack()
-        self.entry_pswd.pack()
+        
+       
         self.tracker_button.pack()
         self.entry_tracker.pack()
         self.label_notice.pack()
         button_log.pack()     
     def clear_entries(self):
-        self.entry_user.delete(0, tk.END)
-        self.entry_pswd.delete(0, tk.END)
+     
         self.label_notice.config(text='') 
 class CreateTorrent(tk.Frame):
     def __init__(self,parent, appController,peer):
@@ -88,7 +82,7 @@ class CreateTorrent(tk.Frame):
 class HomePage(tk.Frame):
     def __init__(self,parent, appController,peer):
         tk.Frame.__init__(self, parent)
-        label_title = tk.Label(self, text="File Sharing Application", font=("Arial", 16))
+        label_title = tk.Label(self, text="FILE SHARING APPLICATION", font=("Arial", 16))
         label_title.pack(pady=10)
         self.uploaded_files = []
 
@@ -171,8 +165,8 @@ class HomePage(tk.Frame):
         for item_id in selected_item:
             # Lấy số thứ tự từ Treeview
             item = self.file_list_tree.item(item_id)
-            #stt = item["values"][0] - 1  # STT trong Treeview bắt đầu từ 1, index trong danh sách bắt đầu từ 0
             file_data = next((data for data in self.uploaded_files if data["address"] == item["values"][0] and data["file_name"] == item["values"][1]), {})
+            if(file_data["address"] == f"{local_ip}:{peer.port}"):continue
             # Lấy thông tin file từ danh sách
             file_name = file_data["file_name"]
             torrent_data = file_data["content"]
@@ -193,12 +187,13 @@ class HomePage(tk.Frame):
                     
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}")
-        messagebox.showinfo("Download Successful", f"File saved as '{save_path}'!")   
+        if(save_path):
+            messagebox.showinfo("Download Successful", f"File saved as '{save_path}'!")
+        else: messagebox.showinfo("Warning", f"This file is already in your repository")   
 
 class App(tk.Tk):
     def __init__(self,peer):
         tk.Tk.__init__(self)
-        self.account = [('binh2308','1'),('phong2808','1')]
         self.title(f'Peer {peer.port}')
         self.geometry("800x500")
         self.resizable(width=False, height=False)
@@ -218,26 +213,15 @@ class App(tk.Tk):
         if FrameClass == StartPage:
             self.frames[FrameClass].clear_entries()
         self.frames[FrameClass].tkraise()    
-    def compareAccount(self,user,password):
-        for acc in self.account:
-            if user == acc[0] and password == acc[1]:
-                return True
-        return False
     def logIn(self, curFrame,peer):
         try:
-            user = curFrame.entry_user.get()
-            pswd = curFrame.entry_pswd.get()
             tracker_url = curFrame.entry_tracker.get()
-            if user == "" or pswd == "" or tracker_url == "":
-                curFrame.label_notice["text"] = "Fields cannot be empty"
+            if tracker_url == "":
+                curFrame.label_notice["text"] = "Please enter tracker URL"
                 return
             peer.tracker_url = tracker_url
-            compare = self.compareAccount(user,pswd)
-            if(compare):
-                self.showPage(HomePage)
-            else: 
-                curFrame.label_notice["text"] = "Invalid username or password"
-                return
+            self.showPage(HomePage)
+           
         except Exception as e:
             print("Error: ", e)
        
@@ -634,51 +618,17 @@ class Peer:
             threading.Thread(target=self.handle_peer_request, args=(client_socket, client_address)).start()
             #self.handle_peer_request(client_socket, client_address)
 
-# HDH Linux
 
-def get_local_ip(interface='enp0s3'):
-    # Chạy lệnh ifconfig và lấy kết quả
-    result = subprocess.run(['ifconfig', interface], capture_output=True, text=True)
-
-    # Phân tích kết quả để tìm địa chỉ IP
-    ip_pattern = r'inet (\d+\.\d+\.\d+\.\d+)'
-    match = re.search(ip_pattern, result.stdout)
-
-    # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
-    if match:
-        return match.group(1)
-    else:
+def get_local_ip():
+    try:
+        # Tạo một socket kết nối đến một địa chỉ bất kỳ (Google DNS)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+        return ip_address
+    except Exception as e:
+        print(f"Lỗi khi lấy địa chỉ IP: {e}")
         return None
-
-# HDH Windows    
-
-# def get_local_ip(interface='Wi-Fi'):
-#     # Chạy lệnh ipconfig và lấy kết quả
-#     result = subprocess.run(['ipconfig'], capture_output=True, text=True)
-
-#     # Phân tích kết quả để tìm địa chỉ IP
-#     ip_pattern = r'IPv4 Address.*?: (\d+\.\d+\.\d+\.\d+)'
-
-#     # Nếu interface được chỉ định, lọc theo interface
-#     if interface:
-#         interface_pattern = re.escape(interface)
-#         interface_start = re.search(interface_pattern, result.stdout, re.IGNORECASE)
-#         if not interface_start:
-#             return None  # Giao diện không tìm thấy
-#         # Lấy phần văn bản sau tên giao diện
-#         output_after_interface = result.stdout[interface_start.end():]
-#         # Tìm địa chỉ IP chỉ trong phần này
-#         match = re.search(ip_pattern, output_after_interface)
-#     else:
-#         # Nếu không chỉ định interface, tìm địa chỉ IP đầu tiên
-#         match = re.search(ip_pattern, result.stdout)
-
-#     # Trả về địa chỉ IP nếu tìm thấy, nếu không trả về None
-#     if match:
-#         return match.group(1)
-#     else:
-#         return None
-
 if __name__ == "__main__":
     peer = Peer()
     try:
@@ -690,5 +640,6 @@ if __name__ == "__main__":
         server_thread.start()
         app = App(peer)
         app.mainloop()
+        
     except Exception as e:
         print(f"Error occurred: {e}")    #""C:/Users/PC/Desktop/test/test.docx""
