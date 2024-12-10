@@ -36,11 +36,8 @@ python3 tracker2.py
 python3 peer2.py
 ```
 
-## Cách đăng nhập
+## Cách truy cập
 
-Nhập một trong 2 tài khoản sau là có thể đăng nhập vào giao diện chính:
-{username: binh2308, password: 1}
-{username: phong2808, password: 1}
 Tracker url: nhập http://<địa chỉ ip và port của tracker>
 Địa chỉ ip và port sẽ hiện trên terminal của tracker2.py sau khi chạy file
 VD: http://192.168.1.48:8080
